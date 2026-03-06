@@ -1,0 +1,40 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu cmake
+
+      - name: Set up Python
+        run: |
+          python3 -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install Conan
+        run: pip install conan
+
+      - name: Detect Conan profile
+        run: conan profile detect --force
+
+      - name: Build
+        run: python scripts/build.py linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deps-linux-x86_64
+          path: output/linux-x86_64/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deps-linux-aarch64
+          path: output/linux-aarch64/

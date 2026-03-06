@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for build-relevant changes
+        id: check
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "$PREV_TAG"..HEAD)
+
+          if echo "$CHANGED" | grep -qvE '^(README\.md|docs/|extras/)'; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-ios:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-ios.yml
+
+  build-tvos:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-tvos.yml
+
+  build-watchos:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-watchos.yml
+
+  build-visionos:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-visionos.yml
+
+  build-android:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-android.yml
+
+  build-macos:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-macos.yml
+
+  build-maccatalyst:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-maccatalyst.yml
+
+  build-linux:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-linux.yml
+
+  build-windows:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    uses: ./.github/workflows/build-windows.yml
+
+  upload-assets:
+    needs:
+      - check-changes
+      - build-ios
+      - build-tvos
+      - build-watchos
+      - build-visionos
+      - build-android
+      - build-macos
+      - build-maccatalyst
+      - build-linux
+      - build-windows
+    if: needs.check-changes.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create release archives
+        run: |
+          for dir in deps-*; do
+            if [ -d "$dir" ]; then
+              (cd "$dir" && zip -r "../${dir}.zip" .)
+            fi
+          done
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: deps-*.zip
