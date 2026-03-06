@@ -2,6 +2,7 @@
 """Builds Conan packages from conanfile.py and merges include/lib into one output per platform. Usage: python scripts/build.py <platform>"""
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -83,6 +84,12 @@ def build_single(profile: str, lib_dst: Path, include_dst: Path | None = None) -
     if not profile_path.is_file():
         raise SystemExit(f"Error: profile not found: {profile_path}")
 
+    env = os.environ.copy()
+    if profile == "visionos-arm64" or profile == "visionos-simulator-arm64":
+        env["CONAN_OPENSSL_CONFIGURATION"] = "iphoneos-cross"
+    elif profile == "visionos-simulator-x86_64":
+        env["CONAN_OPENSSL_CONFIGURATION"] = "darwin64-x86_64-cc"
+
     subprocess.run(
         [
             "conan",
@@ -96,6 +103,7 @@ def build_single(profile: str, lib_dst: Path, include_dst: Path | None = None) -
         ],
         cwd=ROOT,
         check=True,
+        env=env,
     )
 
     deploy_dirs: list[Path] = []
